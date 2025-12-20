@@ -9,7 +9,9 @@ import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Build
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -42,6 +44,22 @@ class BluetoothHelper(private val context: Context) {
         val TX_CHAR_UUID: UUID = UUID.fromString("6E400003-B5A3-F393-E0A9-E50E24DCCA9E")
 
         const val DEVICE_MAC = "48:31:B7:C1:FF:7D"
+    }
+
+    /**
+     * Check if required Bluetooth permissions are granted
+     */
+    private fun hasBluetoothPermissions(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            // Android 12+ requires BLUETOOTH_CONNECT permission
+            ContextCompat.checkSelfPermission(
+                context,
+                android.Manifest.permission.BLUETOOTH_CONNECT
+            ) == PackageManager.PERMISSION_GRANTED
+        } else {
+            // Android 11 and below - permissions are granted at install time
+            true
+        }
     }
 
     private val gattCallback = object : BluetoothGattCallback() {
@@ -98,6 +116,13 @@ class BluetoothHelper(private val context: Context) {
      */
     @SuppressLint("MissingPermission")
     fun connectToDevice(): Boolean {
+        // Check permissions first
+        if (!hasBluetoothPermissions()) {
+            Timber.e("Bluetooth permissions not granted")
+            _connectionState.value = ConnectionState.ERROR
+            return false
+        }
+
         if (bluetoothAdapter == null) {
             Timber.e("Bluetooth adapter not available")
             _connectionState.value = ConnectionState.ERROR
@@ -135,6 +160,11 @@ class BluetoothHelper(private val context: Context) {
      */
     @SuppressLint("MissingPermission")
     fun disconnect() {
+        if (!hasBluetoothPermissions()) {
+            Timber.w("Cannot disconnect: Bluetooth permissions not granted")
+            return
+        }
+        
         bluetoothGatt?.disconnect()
         bluetoothGatt?.close()
         bluetoothGatt = null
@@ -149,6 +179,11 @@ class BluetoothHelper(private val context: Context) {
      */
     @SuppressLint("MissingPermission")
     fun sendData(azimuth: Double, elevation: Double): Boolean {
+        if (!hasBluetoothPermissions()) {
+            Timber.w("Cannot send data: Bluetooth permissions not granted")
+            return false
+        }
+        
         if (_connectionState.value != ConnectionState.CONNECTED) {
             Timber.w("Cannot send data: not connected")
             return false
