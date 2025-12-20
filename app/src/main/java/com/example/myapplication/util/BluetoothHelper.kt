@@ -12,9 +12,15 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.util.UUID
 
@@ -33,6 +39,11 @@ class BluetoothHelper(private val context: Context) {
 
     private var bluetoothGatt: BluetoothGatt? = null
     private var rxCharacteristic: BluetoothGattCharacteristic? = null
+    
+    // Coroutine scope for timeout management
+    private val scope = CoroutineScope(Dispatchers.Main)
+    private var connectionTimeoutJob: Job? = null
+    private var isIntentionalDisconnect = false
 
     private val _connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
     val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
@@ -44,6 +55,9 @@ class BluetoothHelper(private val context: Context) {
         val TX_CHAR_UUID: UUID = UUID.fromString("6E400003-B5A3-F393-E0A9-E50E24DCCA9E")
 
         const val DEVICE_MAC = "48:31:B7:C1:FF:7D"
+        
+        // Connection timeout in milliseconds (15 seconds)
+        private const val CONNECTION_TIMEOUT_MS = 15_000L
     }
 
     /**
@@ -63,18 +77,36 @@ class BluetoothHelper(private val context: Context) {
     }
 
     private val gattCallback = object : BluetoothGattCallback() {
+        @SuppressLint("MissingPermission")
         override fun onConnectionStateChange(gatt: BluetoothGatt?, status: Int, newState: Int) {
             when (newState) {
                 BluetoothProfile.STATE_CONNECTED -> {
                     Timber.d("Connected to GATT server")
+                    // Cancel timeout since connection succeeded
+                    connectionTimeoutJob?.cancel()
                     _connectionState.value = ConnectionState.CONNECTED
                     // Discover services
                     gatt?.discoverServices()
                 }
 
                 BluetoothProfile.STATE_DISCONNECTED -> {
-                    Timber.d("Disconnected from GATT server")
-                    _connectionState.value = ConnectionState.DISCONNECTED
+                    // Cancel timeout job
+                    connectionTimeoutJob?.cancel()
+                    
+                    // Check if this was an intentional disconnect or a connection failure
+                    if (isIntentionalDisconnect) {
+                        Timber.d("Intentionally disconnected from GATT server")
+                        _connectionState.value = ConnectionState.DISCONNECTED
+                        isIntentionalDisconnect = false
+                    } else if (status != BluetoothGatt.GATT_SUCCESS) {
+                        // Connection failed (status != 0 means error)
+                        Timber.e("Connection failed with status: $status")
+                        _connectionState.value = ConnectionState.ERROR
+                    } else {
+                        // Unexpected disconnect
+                        Timber.w("Unexpectedly disconnected from GATT server")
+                        _connectionState.value = ConnectionState.DISCONNECTED
+                    }
                     rxCharacteristic = null
                 }
             }
@@ -146,10 +178,25 @@ class BluetoothHelper(private val context: Context) {
             } else {
                 device.connectGatt(context, false, gattCallback)
             }
+            
+            // Start connection timeout
+            connectionTimeoutJob?.cancel()
+            connectionTimeoutJob = scope.launch {
+                delay(CONNECTION_TIMEOUT_MS)
+                // If we reach here, connection timed out
+                if (_connectionState.value == ConnectionState.CONNECTING) {
+                    Timber.e("Connection timeout after ${CONNECTION_TIMEOUT_MS}ms")
+                    _connectionState.value = ConnectionState.ERROR
+                    bluetoothGatt?.disconnect()
+                    bluetoothGatt?.close()
+                    bluetoothGatt = null
+                }
+            }
 
             return true
         } catch (e: Exception) {
             Timber.e(e, "Failed to connect to device")
+            connectionTimeoutJob?.cancel()
             _connectionState.value = ConnectionState.ERROR
             return false
         }
@@ -165,12 +212,17 @@ class BluetoothHelper(private val context: Context) {
             return
         }
         
+        // Cancel any pending timeout
+        connectionTimeoutJob?.cancel()
+        
+        // Set flag to indicate this is an intentional disconnect
+        isIntentionalDisconnect = true
+        
         bluetoothGatt?.disconnect()
         bluetoothGatt?.close()
         bluetoothGatt = null
         rxCharacteristic = null
-        _connectionState.value = ConnectionState.DISCONNECTED
-        Timber.d("Disconnected from device")
+        Timber.d("Disconnecting from device")
     }
 
     /**
@@ -234,5 +286,14 @@ class BluetoothHelper(private val context: Context) {
      */
     fun isBluetoothAvailable(): Boolean {
         return bluetoothAdapter != null && bluetoothAdapter.isEnabled
+    }
+    
+    /**
+     * Clean up resources - call this when BluetoothHelper is no longer needed
+     */
+    fun cleanup() {
+        connectionTimeoutJob?.cancel()
+        scope.cancel()
+        disconnect()
     }
 }

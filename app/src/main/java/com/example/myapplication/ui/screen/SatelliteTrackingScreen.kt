@@ -78,6 +78,7 @@ import com.example.myapplication.ui.theme.StarWhite
 import com.example.myapplication.ui.theme.TextPrimary
 import com.example.myapplication.ui.theme.TextSecondary
 import com.example.myapplication.ui.theme.TextTertiary
+import com.example.myapplication.util.ConnectionState
 import com.example.myapplication.viewmodel.SatelliteViewModel
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
@@ -106,7 +107,7 @@ fun SatelliteTrackingScreen(
             add(android.Manifest.permission.BLUETOOTH_CONNECT)
         }
     }
-    
+
     val locationPermissions = rememberMultiplePermissionsState(
         permissions = permissionsList
     )
@@ -160,8 +161,12 @@ fun SatelliteTrackingScreen(
             },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("This app requires the following permissions:", color = TextPrimary, fontWeight = FontWeight.Bold)
-                    
+                    Text(
+                        "This app requires the following permissions:",
+                        color = TextPrimary,
+                        fontWeight = FontWeight.Bold
+                    )
+
                     Text("Location:", color = StarWhite, fontWeight = FontWeight.SemiBold)
                     Text(
                         "• Automatically detect your position for satellite tracking",
@@ -171,7 +176,7 @@ fun SatelliteTrackingScreen(
                         "• Calculate satellite azimuth and elevation from your location",
                         color = TextSecondary
                     )
-                    
+
                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
                         Spacer(modifier = Modifier.height(4.dp))
                         Text("Bluetooth:", color = StarWhite, fontWeight = FontWeight.SemiBold)
@@ -184,7 +189,7 @@ fun SatelliteTrackingScreen(
                             color = TextSecondary
                         )
                     }
-                    
+
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         "You can use manual location entry if you prefer not to grant location permission.",
@@ -619,9 +624,9 @@ fun SatelliteTrackingScreen(
                                         .size(8.dp)
                                         .background(
                                             color = when (uiState.bleConnectionState) {
-                                                com.example.myapplication.util.ConnectionState.CONNECTED -> AuroraGreen
-                                                com.example.myapplication.util.ConnectionState.CONNECTING -> CosmicBlue
-                                                com.example.myapplication.util.ConnectionState.ERROR -> ErrorRed
+                                                ConnectionState.CONNECTED -> AuroraGreen
+                                                ConnectionState.CONNECTING -> CosmicBlue
+                                                ConnectionState.ERROR -> ErrorRed
                                                 else -> TextTertiary
                                             },
                                             shape = CircleShape
@@ -629,9 +634,9 @@ fun SatelliteTrackingScreen(
                                 )
                                 Text(
                                     text = when (uiState.bleConnectionState) {
-                                        com.example.myapplication.util.ConnectionState.CONNECTED -> "Connected"
-                                        com.example.myapplication.util.ConnectionState.CONNECTING -> "Connecting..."
-                                        com.example.myapplication.util.ConnectionState.ERROR -> "Error"
+                                        ConnectionState.CONNECTED -> "Connected"
+                                        ConnectionState.CONNECTING -> "Connecting..."
+                                        ConnectionState.ERROR -> "Error"
                                         else -> "Disconnected"
                                     },
                                     style = MaterialTheme.typography.bodySmall,

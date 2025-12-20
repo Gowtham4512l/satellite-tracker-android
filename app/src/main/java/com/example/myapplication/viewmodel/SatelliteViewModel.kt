@@ -263,7 +263,7 @@ class SatelliteViewModel : ViewModel() {
     override fun onCleared() {
         super.onCleared()
         trackingJob?.cancel()
-        bluetoothHelper?.disconnect()
+        bluetoothHelper?.cleanup()
     }
 
     /**
