@@ -1,21 +1,45 @@
 package com.example.myapplication.ui.components
 
-import androidx.compose.animation.core.*
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.example.myapplication.ui.theme.*
+import com.example.myapplication.ui.theme.AuroraGreen
+import com.example.myapplication.ui.theme.CosmicBlue
+import com.example.myapplication.ui.theme.GlassBorder
+import com.example.myapplication.ui.theme.NebulaPink
+import com.example.myapplication.ui.theme.NebulaPurple
+import com.example.myapplication.ui.theme.StarWhite
+import com.example.myapplication.ui.theme.TextSecondary
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -95,13 +119,13 @@ fun CompassVisualization(
             // Draw cardinal directions
             val directions = listOf("N", "E", "S", "W")
             val angles = listOf(0f, 90f, 180f, 270f)
-            
+
             directions.forEachIndexed { index, direction ->
                 val angle = Math.toRadians(angles[index].toDouble())
                 val textRadius = radius * 1.1f
                 val x = center.x + textRadius * sin(angle).toFloat()
                 val y = center.y - textRadius * cos(angle).toFloat()
-                
+
                 drawContext.canvas.nativeCanvas.apply {
                     val paint = android.graphics.Paint().apply {
                         color = android.graphics.Color.WHITE
@@ -118,12 +142,12 @@ fun CompassVisualization(
                 val angle = Math.toRadians(degree.toDouble())
                 val startRadius = if (degree % 90 == 0) radius * 0.9f else radius * 0.95f
                 val endRadius = radius
-                
+
                 val startX = center.x + startRadius * sin(angle).toFloat()
                 val startY = center.y - startRadius * cos(angle).toFloat()
                 val endX = center.x + endRadius * sin(angle).toFloat()
                 val endY = center.y - endRadius * cos(angle).toFloat()
-                
+
                 drawLine(
                     color = GlassBorder,
                     start = Offset(startX, startY),
@@ -136,7 +160,7 @@ fun CompassVisualization(
             // Elevation: 0° = center, 90° = edge
             val elevationRadius = radius * (1f - animatedElevation / 90f)
             val azimuthRad = Math.toRadians(animatedAzimuth.toDouble())
-            
+
             val satelliteX = center.x + elevationRadius * sin(azimuthRad).toFloat()
             val satelliteY = center.y - elevationRadius * cos(azimuthRad).toFloat()
             val satellitePos = Offset(satelliteX, satelliteY)

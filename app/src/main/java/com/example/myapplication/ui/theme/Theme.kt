@@ -10,33 +10,33 @@ private val SpaceColorScheme = darkColorScheme(
     onPrimary = StarWhite,
     primaryContainer = SpacePurple,
     onPrimaryContainer = StarWhite,
-    
+
     secondary = CosmicBlue,
     onSecondary = DeepSpaceBlack,
     secondaryContainer = DeepSpaceBlue,
     onSecondaryContainer = StarWhite,
-    
+
     tertiary = NebulaPink,
     onTertiary = StarWhite,
     tertiaryContainer = DarkNebula,
     onTertiaryContainer = StarWhite,
-    
+
     background = DeepSpaceBlack,
     onBackground = TextPrimary,
-    
+
     surface = DeepSpaceBlue,
     onSurface = TextPrimary,
     surfaceVariant = CardBackground,
     onSurfaceVariant = TextSecondary,
-    
+
     error = ErrorRed,
     onError = StarWhite,
     errorContainer = Color(0x33FF5370),
     onErrorContainer = ErrorRed,
-    
+
     outline = GlassBorder,
     outlineVariant = Color(0x22FFFFFF),
-    
+
     scrim = OverlayDark
 )
 
