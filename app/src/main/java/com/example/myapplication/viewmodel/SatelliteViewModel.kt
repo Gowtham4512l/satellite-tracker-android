@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.example.myapplication.data.model.SatellitePosition
 import com.example.myapplication.data.model.UserLocation
 import com.example.myapplication.data.repository.SatelliteRepository
+import com.example.myapplication.util.BluetoothHelper
+import com.example.myapplication.util.ConnectionState
 import com.example.myapplication.util.LocationHelper
 import com.example.myapplication.util.NetworkHelper
 import kotlinx.coroutines.Job
@@ -26,7 +28,9 @@ data class SatelliteUiState(
     val error: String? = null,
     val isLoading: Boolean = false,
     val locationPermissionGranted: Boolean = false,
-    val useManualLocation: Boolean = false
+    val useManualLocation: Boolean = false,
+    val bleConnected: Boolean = false,
+    val bleConnectionState: ConnectionState = ConnectionState.DISCONNECTED
 )
 
 class SatelliteViewModel : ViewModel() {
@@ -37,6 +41,7 @@ class SatelliteViewModel : ViewModel() {
     private var trackingJob: Job? = null
     private var locationHelper: LocationHelper? = null
     private var repository: SatelliteRepository? = null
+    private var bluetoothHelper: BluetoothHelper? = null
 
     fun initialize(context: Context) {
         // Use applicationContext to avoid memory leak (ViewModel outlives Activity)
@@ -44,11 +49,24 @@ class SatelliteViewModel : ViewModel() {
         locationHelper = LocationHelper(appContext)
         val networkHelper = NetworkHelper(appContext)
         repository = SatelliteRepository(networkHelper = networkHelper)
+        bluetoothHelper = BluetoothHelper(appContext)
 
         _uiState.update {
             it.copy(
                 locationPermissionGranted = locationHelper?.hasLocationPermission() == true
             )
+        }
+
+        // Observe BLE connection state
+        viewModelScope.launch {
+            bluetoothHelper?.connectionState?.collect { state ->
+                _uiState.update {
+                    it.copy(
+                        bleConnected = state == ConnectionState.CONNECTED,
+                        bleConnectionState = state
+                    )
+                }
+            }
         }
     }
 
@@ -223,6 +241,14 @@ class SatelliteViewModel : ViewModel() {
                         error = null
                     )
                 }
+
+                // Auto-send to BLE if connected
+                if (_uiState.value.bleConnected) {
+                    bluetoothHelper?.sendData(
+                        position.azimuth ?: 0.0,
+                        position.elevation ?: 0.0
+                    )
+                }
             },
             onFailure = { error ->
                 _uiState.update {
@@ -237,5 +263,27 @@ class SatelliteViewModel : ViewModel() {
     override fun onCleared() {
         super.onCleared()
         trackingJob?.cancel()
+        bluetoothHelper?.disconnect()
+    }
+
+    /**
+     * Connect to the IoT device via BLE
+     */
+    fun connectBluetooth() {
+        bluetoothHelper?.connectToDevice()
+    }
+
+    /**
+     * Disconnect from the IoT device
+     */
+    fun disconnectBluetooth() {
+        bluetoothHelper?.disconnect()
+    }
+
+    /**
+     * Check if Bluetooth is available
+     */
+    fun isBluetoothAvailable(): Boolean {
+        return bluetoothHelper?.isBluetoothAvailable() ?: false
     }
 }

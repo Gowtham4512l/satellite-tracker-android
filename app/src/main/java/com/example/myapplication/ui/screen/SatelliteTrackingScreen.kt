@@ -22,7 +22,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -94,12 +96,19 @@ fun SatelliteTrackingScreen(
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    // Location permissions
+    // Location and Bluetooth permissions
+    val permissionsList = buildList {
+        add(android.Manifest.permission.ACCESS_FINE_LOCATION)
+        add(android.Manifest.permission.ACCESS_COARSE_LOCATION)
+        // Add Bluetooth permissions for Android 12+ (API 31+)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            add(android.Manifest.permission.BLUETOOTH_SCAN)
+            add(android.Manifest.permission.BLUETOOTH_CONNECT)
+        }
+    }
+    
     val locationPermissions = rememberMultiplePermissionsState(
-        permissions = listOf(
-            android.Manifest.permission.ACCESS_FINE_LOCATION,
-            android.Manifest.permission.ACCESS_COARSE_LOCATION
-        )
+        permissions = permissionsList
     )
 
     // Initialize ViewModel
@@ -145,13 +154,15 @@ fun SatelliteTrackingScreen(
             onDismissRequest = { showPermissionRationale = false },
             title = {
                 Text(
-                    "Location Permission Required",
+                    "Permissions Required",
                     color = StarWhite
                 )
             },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("This app requires location permissions to:", color = TextPrimary)
+                    Text("This app requires the following permissions:", color = TextPrimary, fontWeight = FontWeight.Bold)
+                    
+                    Text("Location:", color = StarWhite, fontWeight = FontWeight.SemiBold)
                     Text(
                         "• Automatically detect your position for satellite tracking",
                         color = TextSecondary
@@ -160,10 +171,23 @@ fun SatelliteTrackingScreen(
                         "• Calculate satellite azimuth and elevation from your location",
                         color = TextSecondary
                     )
-                    Text("• Provide accurate real-time tracking data", color = TextSecondary)
+                    
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("Bluetooth:", color = StarWhite, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "• Connect to IoT devices for real-time data transmission",
+                            color = TextSecondary
+                        )
+                        Text(
+                            "• Send azimuth and elevation data to external hardware",
+                            color = TextSecondary
+                        )
+                    }
+                    
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        "You can also use manual location entry if you prefer not to grant this permission.",
+                        "You can use manual location entry if you prefer not to grant location permission.",
                         color = TextTertiary
                     )
                 }
@@ -361,14 +385,14 @@ fun SatelliteTrackingScreen(
                                                 tint = ErrorRed
                                             )
                                             Text(
-                                                text = "Location Permission Denied",
+                                                text = "Permissions Denied",
                                                 style = MaterialTheme.typography.titleSmall,
                                                 color = ErrorRed,
                                                 fontWeight = FontWeight.Bold
                                             )
                                         }
                                         Text(
-                                            text = "Enable location permission in Settings or use manual location entry.",
+                                            text = "Enable required permissions in Settings or use manual location entry.",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = TextSecondary
                                         )
@@ -392,7 +416,7 @@ fun SatelliteTrackingScreen(
                                 }
                             } else {
                                 SpaceButton(
-                                    text = "Grant Location Permission",
+                                    text = "Grant Permissions",
                                     onClick = { locationPermissions.launchMultiplePermissionRequest() },
                                     modifier = Modifier.fillMaxWidth()
                                 )
@@ -567,6 +591,83 @@ fun SatelliteTrackingScreen(
                                     modifier = Modifier.fillMaxWidth()
                                 )
                             }
+                        }
+                    }
+                }
+
+                // BLE Connection Section
+                GlassCard(modifier = Modifier.fillMaxWidth()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "BLE Connection",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = StarWhite
+                            )
+
+                            // Status indicator
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .background(
+                                            color = when (uiState.bleConnectionState) {
+                                                com.example.myapplication.util.ConnectionState.CONNECTED -> AuroraGreen
+                                                com.example.myapplication.util.ConnectionState.CONNECTING -> CosmicBlue
+                                                com.example.myapplication.util.ConnectionState.ERROR -> ErrorRed
+                                                else -> TextTertiary
+                                            },
+                                            shape = CircleShape
+                                        )
+                                )
+                                Text(
+                                    text = when (uiState.bleConnectionState) {
+                                        com.example.myapplication.util.ConnectionState.CONNECTED -> "Connected"
+                                        com.example.myapplication.util.ConnectionState.CONNECTING -> "Connecting..."
+                                        com.example.myapplication.util.ConnectionState.ERROR -> "Error"
+                                        else -> "Disconnected"
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextSecondary
+                                )
+                            }
+                        }
+
+                        if (uiState.bleConnected) {
+                            Text(
+                                "Device: 48:31:B7:C1:FF:7D",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextSecondary
+                            )
+                            Text(
+                                "Auto-sending azimuth & elevation",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = AuroraGreen
+                            )
+                            SpaceButton(
+                                text = "Disconnect",
+                                onClick = { viewModel.disconnectBluetooth() },
+                                modifier = Modifier.fillMaxWidth(),
+                                isPrimary = false
+                            )
+                        } else {
+                            Text(
+                                "Connect to IoT device for real-time data transmission",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextSecondary
+                            )
+                            SpaceButton(
+                                text = "Connect to IoT Device",
+                                onClick = { viewModel.connectBluetooth() },
+                                modifier = Modifier.fillMaxWidth()
+                            )
                         }
                     }
                 }
