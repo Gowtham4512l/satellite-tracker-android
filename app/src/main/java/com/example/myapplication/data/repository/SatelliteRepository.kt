@@ -61,13 +61,17 @@ class SatelliteRepository(
                     val position = body.positions?.firstOrNull()
 
                     if (position != null) {
+                        // Debug logging for satellite name
+                        Timber.d("API Response - info: ${body.info}")
+                        Timber.d("API Response - satName: ${body.info?.satName}")
+                        
                         Timber.d("Successfully fetched satellite position")
                         return Result.success(
                             SatellitePosition(
                                 azimuth = position.azimuth,
                                 elevation = position.elevation,
                                 timestamp = position.timestamp,
-                                satName = body.info?.satName
+                                satName = body.info?.satName ?: "Satellite $noradId"
                             )
                         )
                     } else {

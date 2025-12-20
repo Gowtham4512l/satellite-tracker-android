@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    id("com.google.devtools.ksp") version "2.0.21-1.0.28"
 }
 
 // Load local.properties for API key
@@ -74,6 +75,7 @@ dependencies {
     // JSON
     implementation(libs.moshi)
     implementation(libs.moshi.kotlin)
+    ksp("com.squareup.moshi:moshi-kotlin-codegen:1.15.0")
 
     // Coroutines
     implementation(libs.kotlinx.coroutines.core)
