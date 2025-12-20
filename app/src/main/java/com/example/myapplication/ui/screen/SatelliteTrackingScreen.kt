@@ -526,13 +526,24 @@ fun SatelliteTrackingScreen(
                                 val lng = manualLng.toDoubleOrNull()
                                 val alt = manualAlt.toDoubleOrNull()
 
+                                // Proper validation with error messages
                                 when {
                                     lat == null || lng == null || alt == null -> {
-                                        viewModel.onNoradIdChange(uiState.noradId)
+                                        viewModel.setError("Please enter valid numbers for all location fields")
                                     }
 
-                                    lat < -90 || lat > 90 -> {}
-                                    lng < -180 || lng > 180 -> {}
+                                    lat < -90 || lat > 90 -> {
+                                        viewModel.setError("Latitude must be between -90 and 90 degrees")
+                                    }
+
+                                    lng < -180 || lng > 180 -> {
+                                        viewModel.setError("Longitude must be between -180 and 180 degrees")
+                                    }
+
+                                    alt < -500 || alt > 100000 -> {
+                                        viewModel.setError("Altitude must be between -500 and 100,000 meters")
+                                    }
+
                                     else -> {
                                         viewModel.onManualLocationChange(lat, lng, alt)
                                     }
@@ -643,8 +654,23 @@ fun SatelliteTrackingScreen(
                                 modifier = Modifier.padding(vertical = 8.dp)
                             )
 
-                            val dateFormat =
+                            // Cache SimpleDateFormat to avoid recreating on every recomposition
+                            val dateFormat = remember {
                                 SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+                            }
+
+                            // Validate timestamp and format safely
+                            val timestamp = position.timestamp ?: 0L
+                            val dateStr = when {
+                                timestamp <= 0L -> "No timestamp"
+                                timestamp > Int.MAX_VALUE -> "Invalid timestamp"
+                                else -> try {
+                                    dateFormat.format(Date(timestamp * 1000))
+                                } catch (e: Exception) {
+                                    "Invalid date"
+                                }
+                            }
+
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -656,11 +682,7 @@ fun SatelliteTrackingScreen(
                                     color = TextSecondary
                                 )
                                 Text(
-                                    text = dateFormat.format(
-                                        Date(
-                                            (position.timestamp ?: 0L) * 1000
-                                        )
-                                    ),
+                                    text = dateStr,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = TextPrimary
                                 )

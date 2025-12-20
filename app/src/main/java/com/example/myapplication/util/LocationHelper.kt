@@ -33,9 +33,14 @@ class LocationHelper(private val context: Context) {
     /**
      * Get current device location
      */
-    @SuppressLint("MissingPermission")
     suspend fun getCurrentLocation(): Result<UserLocation> {
+        // Runtime permission check before accessing location (defensive programming)
+        if (!hasLocationPermission()) {
+            return Result.failure(SecurityException("Location permission not granted"))
+        }
+
         return try {
+            @SuppressLint("MissingPermission")
             val location: Location? = fusedLocationClient.getCurrentLocation(
                 Priority.PRIORITY_HIGH_ACCURACY,
                 null

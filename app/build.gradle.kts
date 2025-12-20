@@ -1,14 +1,23 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
 }
 
+// Load local.properties for API key
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.inputStream().use { stream ->
+        localProperties.load(stream)
+    }
+}
+
 android {
     namespace = "com.example.myapplication"
-    compileSdk {
-        version = release(36)
-    }
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.example.myapplication"
@@ -19,8 +28,9 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // N2YO API Key - Replace with your actual key
-        buildConfigField("String", "N2YO_API_KEY", "\"T3T4AY-T5LAX8-JLTJLU-5M29\"")
+        // N2YO API Key - Loaded from local.properties (not in version control)
+        val apiKey = localProperties.getProperty("n2yo.api.key", "")
+        buildConfigField("String", "N2YO_API_KEY", "\"$apiKey\"")
     }
 
     buildTypes {

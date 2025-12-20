@@ -14,7 +14,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import timber.log.Timber
 
 data class SatelliteUiState(
     val noradId: String = "",
@@ -37,8 +39,10 @@ class SatelliteViewModel : ViewModel() {
     private var repository: SatelliteRepository? = null
 
     fun initialize(context: Context) {
-        locationHelper = LocationHelper(context)
-        val networkHelper = NetworkHelper(context)
+        // Use applicationContext to avoid memory leak (ViewModel outlives Activity)
+        val appContext = context.applicationContext
+        locationHelper = LocationHelper(appContext)
+        val networkHelper = NetworkHelper(appContext)
         repository = SatelliteRepository(networkHelper = networkHelper)
 
         _uiState.update {
@@ -54,6 +58,13 @@ class SatelliteViewModel : ViewModel() {
 
     fun onPermissionGranted() {
         _uiState.update { it.copy(locationPermissionGranted = true) }
+    }
+
+    /**
+     * Set error message in UI state
+     */
+    fun setError(message: String) {
+        _uiState.update { it.copy(error = message) }
     }
 
     fun onManualLocationChange(latitude: Double, longitude: Double, altitude: Double) {
@@ -122,9 +133,22 @@ class SatelliteViewModel : ViewModel() {
         val noradId = _uiState.value.noradId.toIntOrNull()
         val location = _uiState.value.userLocation
 
-        if (noradId == null || noradId <= 0) {
-            _uiState.update { it.copy(error = "Please enter a valid NORAD ID (must be greater than 0)") }
-            return
+        // Enhanced NORAD ID validation with range checking
+        when {
+            noradId == null -> {
+                _uiState.update { it.copy(error = "Please enter a NORAD ID") }
+                return
+            }
+
+            noradId <= 0 -> {
+                _uiState.update { it.copy(error = "NORAD ID must be greater than 0") }
+                return
+            }
+
+            noradId > 99999 -> {
+                _uiState.update { it.copy(error = "NORAD ID must be less than 100000") }
+                return
+            }
         }
 
         if (location == null) {
@@ -143,13 +167,27 @@ class SatelliteViewModel : ViewModel() {
         // Cancel existing job if any
         trackingJob?.cancel()
 
-        // Start polling every 5 seconds
+        // Start polling every 5 seconds with error handling
         trackingJob = viewModelScope.launch {
-            while (true) {
-                // Use current location from state to handle location updates during tracking
-                val currentLocation = _uiState.value.userLocation
-                if (currentLocation != null && currentLocation.latitude != null && currentLocation.longitude != null) {
-                    fetchSatellitePosition(noradId, currentLocation)
+            while (isActive) {  // Check cancellation instead of while(true)
+                try {
+                    // Use current location from state to handle location updates during tracking
+                    val currentLocation = _uiState.value.userLocation
+                    if (currentLocation != null &&
+                        currentLocation.latitude != null &&
+                        currentLocation.longitude != null
+                    ) {
+                        fetchSatellitePosition(noradId, currentLocation)
+                    }
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    // Propagate cancellation
+                    throw e
+                } catch (e: Exception) {
+                    // Log error but continue tracking
+                    Timber.e(e, "Error in tracking loop")
+                    _uiState.update {
+                        it.copy(error = "Tracking error: ${e.message}")
+                    }
                 }
                 delay(5000) // 5 seconds
             }
