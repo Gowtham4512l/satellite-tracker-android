@@ -26,5 +26,7 @@ data class Position(
     @field:Json(name = "elevation") val elevation: Double?,
     @field:Json(name = "ra") val ra: Double?,
     @field:Json(name = "dec") val dec: Double?,
-    @field:Json(name = "timestamp") val timestamp: Long?
+    @field:Json(name = "timestamp") val timestamp: Long?,
+    @field:Json(name = "eclipsed") val eclipsed: Boolean?
 )
+

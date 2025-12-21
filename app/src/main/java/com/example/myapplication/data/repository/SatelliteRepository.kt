@@ -110,7 +110,11 @@ class SatelliteRepository(
                                 azimuth = position.azimuth,
                                 elevation = position.elevation,
                                 timestamp = position.timestamp,
-                                satName = body.info?.satName ?: "Satellite $noradId"
+                                satName = body.info?.satName ?: "Satellite $noradId",
+                                satLatitude = position.satLatitude,
+                                satLongitude = position.satLongitude,
+                                satAltitude = position.satAltitude,
+                                eclipsed = position.eclipsed
                             )
                         )
                     } else {

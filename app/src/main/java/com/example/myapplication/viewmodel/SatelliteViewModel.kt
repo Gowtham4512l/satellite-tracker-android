@@ -294,7 +294,12 @@ class SatelliteViewModel : ViewModel() {
     fun stopTracking() {
         trackingJob?.cancel()
         trackingJob = null
-        _uiState.update { it.copy(isTracking = false) }
+        _uiState.update { 
+            it.copy(
+                isTracking = false,
+                currentPosition = null  // Clear old position data
+            ) 
+        }
     }
 
     private suspend fun fetchSatellitePosition(noradId: Int, location: UserLocation) {
@@ -332,8 +337,15 @@ class SatelliteViewModel : ViewModel() {
             onFailure = { error ->
                 _uiState.update {
                     it.copy(
+                        currentPosition = null,  // Clear position data on error
                         error = "API Error: ${error.message}"
                     )
+                }
+                
+                // Auto-dismiss error after 5 seconds
+                viewModelScope.launch {
+                    delay(5000)
+                    _uiState.update { it.copy(error = null) }
                 }
             }
         )

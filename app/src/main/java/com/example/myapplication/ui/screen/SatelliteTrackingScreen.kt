@@ -806,6 +806,43 @@ fun SatelliteTrackingScreen(
                                 )
                             }
 
+                            // Satellite Position
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                AnimatedMetricCard(
+                                    label = "Sat Latitude",
+                                    value = "${String.format("%.4f", position.satLatitude ?: 0.0)}°",
+                                    isActive = true,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                AnimatedMetricCard(
+                                    label = "Sat Longitude",
+                                    value = "${String.format("%.4f", position.satLongitude ?: 0.0)}°",
+                                    isActive = true,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                AnimatedMetricCard(
+                                    label = "Sat Altitude",
+                                    value = "${String.format("%.2f", position.satAltitude ?: 0.0)} km",
+                                    isActive = true,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                AnimatedMetricCard(
+                                    label = "Eclipse Status",
+                                    value = if (position.eclipsed == true) "☀️ Shadow" else "☀️ Sunlight",
+                                    isActive = true,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+
                             HorizontalDivider(
                                 color = GlassBorder,
                                 modifier = Modifier.padding(vertical = 8.dp)
