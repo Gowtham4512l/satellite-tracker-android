@@ -76,7 +76,7 @@ fun SpaceButton(
         modifier = modifier
             .scale(scale)
             .shadow(
-                elevation = if (enabled) 12.dp else 4.dp,
+                elevation = if (enabled) 12.dp else 0.dp,
                 shape = RoundedCornerShape(12.dp)
             )
             .background(
@@ -95,10 +95,11 @@ fun SpaceButton(
                         )
                     )
                 } else {
+                    // Disabled: subtle border background
                     Brush.linearGradient(
                         colors = listOf(
-                            Color.Gray.copy(alpha = 0.3f),
-                            Color.Gray.copy(alpha = 0.3f)
+                            Color.Gray.copy(alpha = 0.15f),
+                            Color.Gray.copy(alpha = 0.15f)
                         )
                     )
                 },

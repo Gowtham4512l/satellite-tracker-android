@@ -1,19 +1,8 @@
-import java.util.Properties
-
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     id("com.google.devtools.ksp") version "2.0.21-1.0.28"
-}
-
-// Load local.properties for API key
-val localProperties = Properties()
-val localPropertiesFile = rootProject.file("local.properties")
-if (localPropertiesFile.exists()) {
-    localPropertiesFile.inputStream().use { stream ->
-        localProperties.load(stream)
-    }
 }
 
 android {
@@ -24,14 +13,10 @@ android {
         applicationId = "com.example.myapplication"
         minSdk = 24
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
-        // N2YO API Key - Loaded from local.properties (not in version control)
-        val apiKey = localProperties.getProperty("n2yo.api.key", "")
-        buildConfigField("String", "N2YO_API_KEY", "\"$apiKey\"")
     }
 
     buildTypes {
@@ -94,6 +79,9 @@ dependencies {
 
     // Logging
     implementation(libs.timber)
+
+    // Security (Encrypted SharedPreferences)
+    implementation("androidx.security:security-crypto:1.0.0")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

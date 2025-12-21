@@ -7,15 +7,31 @@ import com.example.myapplication.data.remote.N2YOApiService
 import com.example.myapplication.data.remote.RetrofitClient
 import com.example.myapplication.util.NetworkHelper
 import kotlinx.coroutines.delay
+import org.json.JSONObject
 import timber.log.Timber
 
 class SatelliteRepository(
     private val apiService: N2YOApiService = RetrofitClient.apiService,
-    private val networkHelper: NetworkHelper? = null
+    private val networkHelper: NetworkHelper? = null,
+    private var apiKey: String = ""
 ) {
-    private val apiKey = BuildConfig.N2YO_API_KEY
     private val maxRetries = 3
     private val initialDelayMs = 1000L
+    
+    /**
+     * Update the API key (useful when user changes it in settings)
+     */
+    fun updateApiKey(newApiKey: String) {
+        apiKey = newApiKey
+        Timber.d("API key updated")
+    }
+    
+    /**
+     * Check if API key is configured
+     */
+    fun hasApiKey(): Boolean {
+        return apiKey.isNotBlank()
+    }
 
     /**
      * Fetch satellite position from N2YO API
@@ -25,6 +41,12 @@ class SatelliteRepository(
         noradId: Int,
         location: UserLocation
     ): Result<SatellitePosition> {
+        // Check if API key is configured
+        if (apiKey.isBlank()) {
+            Timber.e("API key not configured")
+            return Result.failure(Exception("API key not configured. Please set your N2YO API key in settings."))
+        }
+        
         // Check network connectivity
         if (networkHelper?.isNetworkAvailable() == false) {
             Timber.w("No network connection available")
@@ -58,6 +80,23 @@ class SatelliteRepository(
 
                 if (response.isSuccessful && response.body() != null) {
                     val body = response.body()!!
+                    
+                    // Check if response contains an error field (API returns 200 even for errors)
+                    if (!body.error.isNullOrBlank()) {
+                        val errorMessage = body.error
+                        Timber.e("API returned error in 200 response: $errorMessage")
+                        
+                        val userMessage = when {
+                            errorMessage.contains("Invalid API Key", ignoreCase = true) -> 
+                                "Invalid API Key! Please check your N2YO API key in settings."
+                            errorMessage.contains("rate limit", ignoreCase = true) -> 
+                                "API rate limit exceeded. Please try again later."
+                            else -> "API Error: $errorMessage"
+                        }
+                        
+                        return Result.failure(Exception(userMessage))
+                    }
+                    
                     val position = body.positions?.firstOrNull()
 
                     if (position != null) {
@@ -76,12 +115,42 @@ class SatelliteRepository(
                         )
                     } else {
                         Timber.w("No position data in response")
-                        return Result.failure(Exception("No position data available"))
+                        return Result.failure(Exception("No position data available. Please check the NORAD ID."))
                     }
                 } else {
-                    Timber.e("API error: ${response.code()} - ${response.message()}")
-                    lastException =
-                        Exception("API Error: ${response.code()} - ${response.message()}")
+                    // Try to parse error response body
+                    val errorMessage = try {
+                        val errorBody = response.errorBody()?.string()
+                        if (!errorBody.isNullOrBlank()) {
+                            val json = JSONObject(errorBody)
+                            when {
+                                json.has("error") -> json.getString("error")
+                                else -> response.message()
+                            }
+                        } else {
+                            response.message()
+                        }
+                    } catch (e: Exception) {
+                        Timber.w(e, "Failed to parse error body")
+                        response.message()
+                    }
+                    
+                    Timber.e("API error: ${response.code()} - $errorMessage")
+                    
+                    // Provide user-friendly error messages
+                    val userMessage = when {
+                        errorMessage.contains("Invalid API Key", ignoreCase = true) -> 
+                            "Invalid API Key! Please check your N2YO API key in settings."
+                        response.code() == 401 -> 
+                            "Authentication failed. Please verify your API key in settings."
+                        response.code() == 429 -> 
+                            "API rate limit exceeded. Please try again later."
+                        response.code() >= 500 -> 
+                            "N2YO server error. Please try again later."
+                        else -> "API Error: $errorMessage"
+                    }
+                    
+                    lastException = Exception(userMessage)
                 }
             } catch (e: Exception) {
                 Timber.e(e, "Network request failed (attempt ${attempt + 1}/$maxRetries)")

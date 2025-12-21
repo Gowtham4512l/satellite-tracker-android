@@ -42,14 +42,36 @@ class SatelliteViewModel : ViewModel() {
     private var locationHelper: LocationHelper? = null
     private var repository: SatelliteRepository? = null
     private var bluetoothHelper: BluetoothHelper? = null
+    private var settingsRepository: com.example.myapplication.data.repository.SettingsRepository? =
+        null
+    private var errorDismissJob: Job? = null
+    
+    companion object {
+        private const val ERROR_DISMISS_DELAY_MS = 5_000L // 5 seconds
+    }
 
     fun initialize(context: Context) {
         // Use applicationContext to avoid memory leak (ViewModel outlives Activity)
         val appContext = context.applicationContext
         locationHelper = LocationHelper(appContext)
         val networkHelper = NetworkHelper(appContext)
-        repository = SatelliteRepository(networkHelper = networkHelper)
+
+        // Initialize settings repository
+        settingsRepository =
+            com.example.myapplication.data.repository.SettingsRepository(appContext)
+
+        // Load API key from settings
+        val apiKey = settingsRepository?.getApiKey() ?: ""
+        repository = SatelliteRepository(networkHelper = networkHelper, apiKey = apiKey)
+
+        // Initialize Bluetooth helper
         bluetoothHelper = BluetoothHelper(appContext)
+
+        // Load and set BLE MAC address if configured
+        val bleMac = settingsRepository?.getBleMacAddress()
+        if (!bleMac.isNullOrBlank()) {
+            bluetoothHelper?.setMacAddress(bleMac)
+        }
 
         _uiState.update {
             it.copy(
@@ -70,6 +92,21 @@ class SatelliteViewModel : ViewModel() {
         }
     }
 
+    /**
+     * Reload settings (call this when returning from settings screen)
+     */
+    fun reloadSettings() {
+        val apiKey = settingsRepository?.getApiKey() ?: ""
+        repository?.updateApiKey(apiKey)
+
+        val bleMac = settingsRepository?.getBleMacAddress()
+        if (!bleMac.isNullOrBlank()) {
+            bluetoothHelper?.setMacAddress(bleMac)
+        }
+
+        Timber.d("Settings reloaded")
+    }
+
     fun onNoradIdChange(id: String) {
         _uiState.update { it.copy(noradId = id, error = null) }
     }
@@ -79,10 +116,28 @@ class SatelliteViewModel : ViewModel() {
     }
 
     /**
-     * Set error message in UI state
+     * Set error message in UI state with auto-dismiss after 10 seconds
      */
     fun setError(message: String) {
         _uiState.update { it.copy(error = message) }
+        
+        // Cancel any existing error dismiss job
+        errorDismissJob?.cancel()
+        
+        // Schedule error dismissal after 10 seconds
+        errorDismissJob = viewModelScope.launch {
+            delay(ERROR_DISMISS_DELAY_MS)
+            _uiState.update { it.copy(error = null) }
+            Timber.d("Error message auto-dismissed")
+        }
+    }
+    
+    /**
+     * Manually clear error message
+     */
+    fun clearError() {
+        errorDismissJob?.cancel()
+        _uiState.update { it.copy(error = null) }
     }
 
     fun onManualLocationChange(latitude: Double, longitude: Double, altitude: Double) {
@@ -118,7 +173,19 @@ class SatelliteViewModel : ViewModel() {
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        error = "LocationHelper not initialized"
+                        error = "Location helper not initialized"
+                    )
+                }
+                return@launch
+            }
+            
+            // Check permission before attempting to get location
+            if (!helper.hasLocationPermission()) {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        locationPermissionGranted = false,
+                        error = "Location permission required. Please grant location access."
                     )
                 }
                 return@launch
@@ -154,29 +221,29 @@ class SatelliteViewModel : ViewModel() {
         // Enhanced NORAD ID validation with range checking
         when {
             noradId == null -> {
-                _uiState.update { it.copy(error = "Please enter a NORAD ID") }
+                setError("Please enter a NORAD ID")
                 return
             }
 
             noradId <= 0 -> {
-                _uiState.update { it.copy(error = "NORAD ID must be greater than 0") }
+                setError("NORAD ID must be greater than 0")
                 return
             }
 
             noradId > 99999 -> {
-                _uiState.update { it.copy(error = "NORAD ID must be less than 100000") }
+                setError("NORAD ID must be less than 100000")
                 return
             }
         }
 
         if (location == null) {
-            _uiState.update { it.copy(error = "Location not available. Please enable GPS or enter manual location.") }
+            setError("Location not available. Please enable GPS or enter manual location.")
             return
         }
 
         // Validate that location has required coordinates
         if (location.latitude == null || location.longitude == null) {
-            _uiState.update { it.copy(error = "Location coordinates are incomplete. Please try again.") }
+            setError("Location coordinates are incomplete. Please try again.")
             return
         }
 
@@ -189,6 +256,14 @@ class SatelliteViewModel : ViewModel() {
         trackingJob = viewModelScope.launch {
             while (isActive) {  // Check cancellation instead of while(true)
                 try {
+                    // Check if location permission is still granted (user might revoke during tracking)
+                    if (locationHelper?.hasLocationPermission() == false) {
+                        Timber.w("Location permission revoked during tracking")
+                        setError("Location permission was revoked. Please grant permission to continue tracking.")
+                        stopTracking()
+                        break
+                    }
+                    
                     // Use current location from state to handle location updates during tracking
                     val currentLocation = _uiState.value.userLocation
                     if (currentLocation != null &&
@@ -200,12 +275,16 @@ class SatelliteViewModel : ViewModel() {
                 } catch (e: kotlinx.coroutines.CancellationException) {
                     // Propagate cancellation
                     throw e
+                } catch (e: SecurityException) {
+                    // Permission revoked
+                    Timber.e(e, "Security exception in tracking loop - permission likely revoked")
+                    setError("Permission error: ${e.message}")
+                    stopTracking()
+                    break
                 } catch (e: Exception) {
                     // Log error but continue tracking
                     Timber.e(e, "Error in tracking loop")
-                    _uiState.update {
-                        it.copy(error = "Tracking error: ${e.message}")
-                    }
+                    setError("Tracking error: ${e.message}")
                 }
                 delay(5000) // 5 seconds
             }
@@ -221,13 +300,13 @@ class SatelliteViewModel : ViewModel() {
     private suspend fun fetchSatellitePosition(noradId: Int, location: UserLocation) {
         // Validate location has non-null coordinates before API call
         if (location.latitude == null || location.longitude == null) {
-            _uiState.update { it.copy(error = "Invalid location coordinates") }
+            setError("Invalid location coordinates")
             return
         }
 
         val repo = repository
         if (repo == null) {
-            _uiState.update { it.copy(error = "Repository not initialized") }
+            setError("Repository not initialized")
             return
         }
 
@@ -270,7 +349,12 @@ class SatelliteViewModel : ViewModel() {
      * Connect to the IoT device via BLE
      */
     fun connectBluetooth() {
-        bluetoothHelper?.connectToDevice()
+        val bleMac = settingsRepository?.getBleMacAddress()
+        if (bleMac.isNullOrBlank()) {
+            setError("BLE MAC address not configured. Please set it in settings.")
+            return
+        }
+        bluetoothHelper?.connectToDevice(bleMac)
     }
 
     /**

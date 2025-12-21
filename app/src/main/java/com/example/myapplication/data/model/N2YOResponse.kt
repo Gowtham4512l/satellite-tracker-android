@@ -6,7 +6,8 @@ import com.squareup.moshi.JsonClass
 @JsonClass(generateAdapter = true)
 data class N2YOResponse(
     @field:Json(name = "info") val info: Info?,
-    @field:Json(name = "positions") val positions: List<Position>?
+    @field:Json(name = "positions") val positions: List<Position>?,
+    @field:Json(name = "error") val error: String? // API returns error field even with 200 OK
 )
 
 @JsonClass(generateAdapter = true)

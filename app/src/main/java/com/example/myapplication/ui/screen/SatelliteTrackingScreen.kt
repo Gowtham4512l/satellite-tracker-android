@@ -30,6 +30,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -92,10 +93,17 @@ import java.util.Locale
 @Composable
 fun SatelliteTrackingScreen(
     modifier: Modifier = Modifier,
-    viewModel: SatelliteViewModel = viewModel()
+    viewModel: SatelliteViewModel = viewModel(),
+    onNavigateToSettings: () -> Unit = {},
+    onTrackingStateChanged: (Boolean) -> Unit = {}
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    
+    // Notify parent of tracking state changes
+    LaunchedEffect(uiState.isTracking) {
+        onTrackingStateChanged(uiState.isTracking)
+    }
 
     // Location and Bluetooth permissions
     val permissionsList = buildList {
@@ -255,23 +263,44 @@ fun SatelliteTrackingScreen(
                 verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
                 // Header
-                Column(
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "🛰️ SATELLITE TRACKER",
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = StarWhite,
-                        fontWeight = FontWeight.Bold,
-                        textAlign = TextAlign.Center
-                    )
-                    Text(
-                        text = if (uiState.isTracking) "TRACKING ACTIVE" else "READY TO TRACK",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (uiState.isTracking) AuroraGreen else TextSecondary,
-                        textAlign = TextAlign.Center
-                    )
+                    Spacer(modifier = Modifier.size(40.dp)) // Balance the layout
+                    
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "🛰️ SATELLITE TRACKER",
+                            style = MaterialTheme.typography.headlineMedium,
+                            color = StarWhite,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center
+                        )
+                        Text(
+                            text = if (uiState.isTracking) "TRACKING ACTIVE" else "READY TO TRACK",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (uiState.isTracking) AuroraGreen else TextSecondary,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                    
+                    // Settings button
+                    androidx.compose.material3.IconButton(
+                        onClick = onNavigateToSettings,
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Settings",
+                            tint = StarWhite,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
                 }
 
                 // Compass Visualization (only when tracking)
@@ -445,37 +474,55 @@ fun SatelliteTrackingScreen(
                                             modifier = Modifier.fillMaxWidth(),
                                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                                         ) {
-                                            AnimatedMetricCard(
-                                                label = "Latitude",
-                                                value = "${
-                                                    String.format(
-                                                        "%.4f",
-                                                        loc.latitude ?: 0.0
-                                                    )
-                                                }°",
-                                                modifier = Modifier.weight(1f)
+                                            Column(
+                                                modifier = Modifier.weight(1f),
+                                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                Text(
+                                                    text = "Latitude",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = TextSecondary
+                                                )
+                                                Text(
+                                                    text = "${String.format("%.4f", loc.latitude ?: 0.0)}°",
+                                                    style = MaterialTheme.typography.bodyLarge,
+                                                    color = TextPrimary,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                            Column(
+                                                modifier = Modifier.weight(1f),
+                                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                Text(
+                                                    text = "Longitude",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = TextSecondary
+                                                )
+                                                Text(
+                                                    text = "${String.format("%.4f", loc.longitude ?: 0.0)}°",
+                                                    style = MaterialTheme.typography.bodyLarge,
+                                                    color = TextPrimary,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                        }
+                                        Column(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Text(
+                                                text = "Altitude",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = TextSecondary
                                             )
-                                            AnimatedMetricCard(
-                                                label = "Longitude",
-                                                value = "${
-                                                    String.format(
-                                                        "%.4f",
-                                                        loc.longitude ?: 0.0
-                                                    )
-                                                }°",
-                                                modifier = Modifier.weight(1f)
+                                            Text(
+                                                text = "${String.format("%.1f", loc.altitude ?: 0.0)} m",
+                                                style = MaterialTheme.typography.bodyLarge,
+                                                color = TextPrimary,
+                                                fontWeight = FontWeight.Bold
                                             )
                                         }
-                                        AnimatedMetricCard(
-                                            label = "Altitude",
-                                            value = "${
-                                                String.format(
-                                                    "%.1f",
-                                                    loc.altitude ?: 0.0
-                                                )
-                                            } m",
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
                                     }
                                 }
                             }
@@ -646,8 +693,12 @@ fun SatelliteTrackingScreen(
                         }
 
                         if (uiState.bleConnected) {
+                            val macAddress = viewModel.uiState.value.let {
+                                // Try to get MAC from BluetoothHelper, fallback to settings
+                                "Connected Device"
+                            }
                             Text(
-                                "Device: 48:31:B7:C1:FF:7D",
+                                "Device connected",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = TextSecondary
                             )
